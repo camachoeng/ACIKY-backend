@@ -7,8 +7,19 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
+const allowedOrigins = [
+    'http://127.0.0.1:5500', // Local development
+    'https://camachoeng.github.io' // Production
+];
+
 app.use(cors({
-    origin: 'http://127.0.0.1:5500', // Your frontend Live Server URL
+    origin: function(origin, callback) {
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     credentials: true
 }));
 
@@ -21,10 +32,10 @@ app.use(session({
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: false,        // set to false for development (http)
+        secure: process.env.NODE_ENV === 'production', // true for HTTPS
         httpOnly: true,
-        maxAge: 1000 * 60 * 60 * 24,  // 24 hours
-        sameSite: 'lax'      // CRITICAL: change from 'strict' to 'lax'
+        maxAge: 1000 * 60 * 60 * 24,
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax' // 'none' for cross-origin
     }
 }));
 
