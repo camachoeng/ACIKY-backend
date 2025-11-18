@@ -26,18 +26,17 @@ app.use(cors({
 app.use(express.json({ charset: 'utf-8' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Set charset for all responses
-app.use((req, res, next) => {
-    res.charset = 'utf-8';
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    next();
-});
+// Trust proxy for Heroku
+if (process.env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1);
+}
 
 // Session configuration
 app.use(session({
     secret: process.env.SESSION_SECRET || 'your-secret-key',
     resave: false,
     saveUninitialized: false,
+    proxy: process.env.NODE_ENV === 'production', // trust first proxy
     cookie: {
         secure: process.env.NODE_ENV === 'production', // true for HTTPS
         httpOnly: true,
