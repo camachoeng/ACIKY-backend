@@ -118,11 +118,19 @@ exports.login = async (req, res) => {
 exports.logout = (req, res) => {
     req.session.destroy((err) => {
         if (err) {
+            console.error('Logout error:', err);
             return res.status(500).json({ 
                 success: false, 
                 message: 'Logout failed' 
             });
         }
+        // Clear the session cookie
+        res.clearCookie('connect.sid', {
+            path: '/',
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
+        });
         res.json({ 
             success: true, 
             message: 'Logout successful' 
