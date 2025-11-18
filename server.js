@@ -23,8 +23,15 @@ app.use(cors({
     credentials: true
 }));
 
-app.use(express.json());
+app.use(express.json({ charset: 'utf-8' }));
 app.use(express.urlencoded({ extended: true }));
+
+// Set charset for all responses
+app.use((req, res, next) => {
+    res.charset = 'utf-8';
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    next();
+});
 
 // Session configuration
 app.use(session({
