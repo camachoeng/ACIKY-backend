@@ -101,12 +101,16 @@ exports.createActivity = async (req, res) => {
             duration,
             location,
             instructor_id,
+            teacher_id,
             price,
             icon,
             difficulty_level,
             active,
             featured
         } = req.body;
+
+        // Use teacher_id if provided, otherwise fall back to instructor_id
+        const finalTeacherId = teacher_id || instructor_id || null;
 
         // Validation - only name is truly required
         if (!name) {
@@ -131,7 +135,7 @@ exports.createActivity = async (req, res) => {
             schedule || null,
             duration || null,
             location || null,
-            instructor_id || null,
+            finalTeacherId,
             price || null,
             icon || null,
             difficulty_level || 'all',
@@ -159,6 +163,12 @@ exports.updateActivity = async (req, res) => {
     try {
         const { id } = req.params;
         const updates = req.body;
+
+        // Handle teacher_id -> instructor_id mapping
+        if (updates.teacher_id !== undefined) {
+            updates.instructor_id = updates.teacher_id;
+            delete updates.teacher_id;
+        }
 
         // Check if activity exists
         const [existing] = await db.query(
