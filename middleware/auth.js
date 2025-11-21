@@ -44,7 +44,7 @@ exports.requireAdmin = async (req, res, next) => {
     }
 };
 
-// Check if user has admin or instructor/teacher role
+// Check if user has admin or instructor role
 exports.requireInstructor = async (req, res, next) => {
     try {
         if (!req.session.userId) {
@@ -60,10 +60,10 @@ exports.requireInstructor = async (req, res, next) => {
             [req.session.userId]
         );
 
-        if (users.length === 0 || !['admin', 'instructor', 'teacher'].includes(users[0].role)) {
+        if (users.length === 0 || !['admin', 'instructor'].includes(users[0].role)) {
             return res.status(403).json({
                 success: false,
-                message: 'Teacher, instructor or admin access required'
+                message: 'Instructor or admin access required'
             });
         }
 
