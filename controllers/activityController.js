@@ -49,7 +49,7 @@ exports.getAllActivities = async (req, res) => {
         console.error('Get all activities error:', error);
         res.status(500).json({
             success: false,
-            message: 'Failed to fetch activities'
+            message: 'Error al obtener las clases'
         });
     }
 };
@@ -72,7 +72,7 @@ exports.getActivityById = async (req, res) => {
         if (activities.length === 0) {
             return res.status(404).json({
                 success: false,
-                message: 'Activity not found'
+                message: 'Clase no encontrada'
             });
         }
 
@@ -85,7 +85,7 @@ exports.getActivityById = async (req, res) => {
         console.error('Get activity error:', error);
         res.status(500).json({
             success: false,
-            message: 'Failed to fetch activity'
+            message: 'Error al obtener la clase'
         });
     }
 };
@@ -112,7 +112,7 @@ exports.createActivity = async (req, res) => {
         if (!name) {
             return res.status(400).json({
                 success: false,
-                message: 'Name is required'
+                message: 'El nombre es requerido'
             });
         }
 
@@ -141,7 +141,7 @@ exports.createActivity = async (req, res) => {
 
         res.status(201).json({
             success: true,
-            message: 'Activity created successfully',
+            message: 'Clase creada exitosamente',
             data: { id: result.insertId }
         });
 
@@ -149,7 +149,7 @@ exports.createActivity = async (req, res) => {
         console.error('Create activity error:', error);
         res.status(500).json({
             success: false,
-            message: 'Failed to create activity'
+            message: 'Error al crear la clase'
         });
     }
 };
@@ -169,7 +169,7 @@ exports.updateActivity = async (req, res) => {
         if (existing.length === 0) {
             return res.status(404).json({
                 success: false,
-                message: 'Activity not found'
+                message: 'Clase no encontrada'
             });
         }
 
@@ -193,7 +193,7 @@ exports.updateActivity = async (req, res) => {
         if (fields.length === 0) {
             return res.status(400).json({
                 success: false,
-                message: 'No valid fields to update'
+                message: 'No hay campos válidos para actualizar'
             });
         }
 
@@ -206,14 +206,14 @@ exports.updateActivity = async (req, res) => {
 
         res.json({
             success: true,
-            message: 'Activity updated successfully'
+            message: 'Clase actualizada exitosamente'
         });
 
     } catch (error) {
         console.error('Update activity error:', error);
         res.status(500).json({
             success: false,
-            message: 'Failed to update activity'
+            message: 'Error al actualizar la clase'
         });
     }
 };
@@ -231,20 +231,20 @@ exports.deleteActivity = async (req, res) => {
         if (result.affectedRows === 0) {
             return res.status(404).json({
                 success: false,
-                message: 'Activity not found'
+                message: 'Clase no encontrada'
             });
         }
 
         res.json({
             success: true,
-            message: 'Activity deleted successfully'
+            message: 'Clase eliminada exitosamente'
         });
 
     } catch (error) {
         console.error('Delete activity error:', error);
         res.status(500).json({
             success: false,
-            message: 'Failed to delete activity'
+            message: 'Error al eliminar la clase'
         });
     }
 };
