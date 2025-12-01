@@ -9,6 +9,7 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 const allowedOrigins = [
     'http://127.0.0.1:5500', // Local development
+    'http://192.168.1.70:5500', // Local network (phone access)
     'https://camachoeng.github.io' // Production
 ];
 
