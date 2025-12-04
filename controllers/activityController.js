@@ -14,7 +14,8 @@ exports.getAllActivities = async (req, res) => {
         let query = `
             SELECT 
                 a.*,
-                u.username as instructor_name
+                u.username as instructor_name,
+                u.email as instructor_email
             FROM activities a
             LEFT JOIN users u ON a.instructor_id = u.id
             WHERE 1=1
@@ -63,6 +64,7 @@ exports.getActivityById = async (req, res) => {
             SELECT 
                 a.*,
                 u.username as instructor_name,
+                u.email as instructor_email,
                 u.bio as instructor_bio
             FROM activities a
             LEFT JOIN users u ON a.instructor_id = u.id

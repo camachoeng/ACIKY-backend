@@ -54,6 +54,7 @@ const blogRoutes = require('./routes/blog');
 const activityRoutes = require('./routes/activities');
 const routeRoutes = require('./routes/routes');
 const userRoutes = require('./routes/users');
+const bookingRoutes = require('./routes/booking');
 
 // Use routes
 app.use('/api/auth', authRoutes);
@@ -61,6 +62,7 @@ app.use('/api/blog', blogRoutes);
 app.use('/api/activities', activityRoutes);
 app.use('/api/routes', routeRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/booking', bookingRoutes);
 
 // Test route
 app.get('/', (req, res) => {
