@@ -12,7 +12,7 @@ ACIKY is a dual-repository yoga studio management system for the Cuban Kundalini
 - **config/database.js**: MySQL connection pool (mysql2/promise wrapper)
 - **routes/**: Express routers that delegate to controllers
 - **controllers/**: Business logic with async/await database queries
-- **middleware/auth.js**: Three middleware functions: `requireAuth`, `requireAdmin`, `requireInstructor`
+- **middleware/auth.js**: Three middleware functions: `requireAuth`, `requireAdmin`, `requireInstructor` (Note: instructors have no special privileges - only used for class assignment)
 
 ### Frontend Structure (yoga/)
 - **index.html**: Main landing page with promotional sliders
@@ -109,6 +109,8 @@ router.get('/', controller.publicMethod);              // No middleware
 router.post('/', requireAdmin, controller.adminMethod); // Admin only
 router.put('/:id', requireInstructor, controller.instructorMethod); // Admin or instructor
 ```
+
+**IMPORTANT**: The instructor role is ONLY used for assigning instructors to classes. Instructors do NOT have access to the admin panel or any administrative privileges. Only users with `role = 'admin'` can access admin features.
 
 ### Dynamic Header/Footer Injection
 `common.js` runs on every page:
