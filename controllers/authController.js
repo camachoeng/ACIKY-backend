@@ -155,9 +155,13 @@ exports.checkAuth = (req, res) => {
 // Update user profile
 exports.updateProfile = async (req, res) => {
     try {
+        console.log('Update profile - session:', req.session);
+        console.log('Update profile - userId:', req.session.userId);
+        
         const userId = req.session.userId;
         
         if (!userId) {
+            console.log('No userId in session - not authenticated');
             return res.status(401).json({ 
                 success: false, 
                 message: 'Not authenticated' 

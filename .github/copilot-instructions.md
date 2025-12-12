@@ -177,12 +177,39 @@ Backend logs database connection status on startup. Frontend logs auth status in
 - **Database**: Use ClearDB MySQL connection from Heroku config
 
 ## Code Style Guidelines
+
+### JavaScript/Backend
 - Use `async/await` (not `.then()`) for all async operations
 - Destructure request params: `const { field } = req.body;`
 - Always use parameterized queries: `db.query('SELECT * FROM users WHERE id = ?', [id])`
 - Prefer `const` over `let`; avoid `var`
 - Use arrow functions for callbacks: `arr.forEach(item => {})`
 - Include error logging: `console.error('Context error:', error);`
+
+### HTML/CSS Styling Preferences
+**CRITICAL**: Never use inline styles in HTML. Always use CSS classes defined in `style.css`.
+
+When creating new UI elements:
+1. **HTML Structure**: Use semantic class names that describe the element's purpose
+   - Example: `<div class="form-group">` not `<div style="margin-bottom: 15px;">`
+   
+2. **CSS Organization**: Add styles to `css/style.css` in appropriate sections
+   - Group related styles together with comments
+   - Use meaningful class names: `.edit-message`, `.form-input`, `.password-section`
+   
+3. **State Classes**: Use modifier classes for states
+   - Example: `.edit-message.success` and `.edit-message.error` instead of inline style changes
+   - Toggle classes with JavaScript: `element.classList.add('success')`
+   
+4. **Avoid**: 
+   - ❌ `style="display: none; padding: 10px; color: red;"`
+   - ❌ Setting styles via JavaScript: `element.style.backgroundColor = '#fee'`
+   
+5. **Prefer**:
+   - ✅ `<div class="edit-message error">` with CSS: `.edit-message.error { background: #fee; }`
+   - ✅ `element.classList.add('error')` to change states
+
+6. **Exception**: Only use inline styles for truly dynamic values that can't be predetermined (e.g., positioning based on calculations)
 
 ## File Naming Conventions
 - Backend controllers: `*Controller.js` (camelCase)
