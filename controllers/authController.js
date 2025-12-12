@@ -92,6 +92,7 @@ exports.login = async (req, res) => {
         // Create session
         req.session.userId = user.id;
         req.session.username = user.username;
+        req.session.email = user.email;
         req.session.role = user.role;
 
         res.json({ 
@@ -139,6 +140,7 @@ exports.checkAuth = (req, res) => {
             user: {
                 id: req.session.userId,
                 username: req.session.username,
+                email: req.session.email,
                 role: req.session.role
             }
         });
