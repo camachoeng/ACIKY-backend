@@ -3,13 +3,13 @@ const db = require('../config/database');
 // Create new testimonial (public)
 exports.createTestimonial = async (req, res) => {
     try {
-        const { user_name, email, message, rating } = req.body;
+        const { author_name, location, content, rating, activity_id } = req.body;
 
         // Validation
-        if (!user_name || !email || !message || !rating) {
+        if (!author_name || !content || !rating) {
             return res.status(400).json({ 
                 success: false, 
-                message: 'All fields are required' 
+                message: 'Name, content and rating are required' 
             });
         }
 
@@ -21,10 +21,10 @@ exports.createTestimonial = async (req, res) => {
             });
         }
 
-        // Insert testimonial with pending status
+        // Insert testimonial with approved=0 (pending)
         const [result] = await db.query(
-            'INSERT INTO testimonials (user_name, email, message, rating, status) VALUES (?, ?, ?, ?, ?)',
-            [user_name, email, message, rating, 'pending']
+            'INSERT INTO testimonials (author_name, location, content, rating, activity_id, approved, featured) VALUES (?, ?, ?, ?, ?, 0, 0)',
+            [author_name, location || null, content, rating, activity_id || null]
         );
 
         res.status(201).json({ 
@@ -46,8 +46,12 @@ exports.createTestimonial = async (req, res) => {
 exports.getApprovedTestimonials = async (req, res) => {
     try {
         const [testimonials] = await db.query(
-            'SELECT id, user_name, message, rating, created_at FROM testimonials WHERE status = ? ORDER BY created_at DESC',
-            ['approved']
+            `SELECT t.id, t.author_name, t.location, t.content, t.rating, t.featured, t.created_at, 
+                    a.name as activity_name
+             FROM testimonials t
+             LEFT JOIN activities a ON t.activity_id = a.id
+             WHERE t.approved = 1 
+             ORDER BY t.featured DESC, t.created_at DESC`
         );
 
         res.json({ 
@@ -68,7 +72,10 @@ exports.getApprovedTestimonials = async (req, res) => {
 exports.getAllTestimonials = async (req, res) => {
     try {
         const [testimonials] = await db.query(
-            'SELECT * FROM testimonials ORDER BY created_at DESC'
+            `SELECT t.*, a.name as activity_name
+             FROM testimonials t
+             LEFT JOIN activities a ON t.activity_id = a.id
+             ORDER BY t.created_at DESC`
         );
 
         res.json({ 
@@ -85,23 +92,23 @@ exports.getAllTestimonials = async (req, res) => {
     }
 };
 
-// Update testimonial status (admin only)
+// Update testimonial approval status (admin only)
 exports.updateTestimonialStatus = async (req, res) => {
     try {
         const { id } = req.params;
-        const { status } = req.body;
+        const { approved } = req.body;
 
-        // Validation
-        if (!status || !['pending', 'approved', 'rejected'].includes(status)) {
+        // Validation - approved should be 0 or 1
+        if (approved !== 0 && approved !== 1) {
             return res.status(400).json({ 
                 success: false, 
-                message: 'Invalid status. Must be: pending, approved, or rejected' 
+                message: 'Invalid status. Must be 0 (rejected) or 1 (approved)' 
             });
         }
 
         const [result] = await db.query(
-            'UPDATE testimonials SET status = ? WHERE id = ?',
-            [status, id]
+            'UPDATE testimonials SET approved = ? WHERE id = ?',
+            [approved, id]
         );
 
         if (result.affectedRows === 0) {
@@ -118,6 +125,37 @@ exports.updateTestimonialStatus = async (req, res) => {
 
     } catch (error) {
         console.error('Update testimonial status error:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Server error updating testimonial' 
+        });
+    }
+};
+
+// Toggle featured status (admin only)
+exports.toggleFeatured = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const [result] = await db.query(
+            'UPDATE testimonials SET featured = NOT featured WHERE id = ?',
+            [id]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Testimonial not found' 
+            });
+        }
+
+        res.json({ 
+            success: true, 
+            message: 'Featured status updated successfully' 
+        });
+
+    } catch (error) {
+        console.error('Toggle featured error:', error);
         res.status(500).json({ 
             success: false, 
             message: 'Server error updating testimonial' 
