@@ -14,4 +14,7 @@ router.post('/logout', authController.logout);
 // Check authentication status
 router.get('/check', authController.checkAuth);
 
+// Update profile route
+router.put('/profile', authController.updateProfile);
+
 module.exports = router;
