@@ -42,9 +42,7 @@ app.use(session({
         secure: process.env.NODE_ENV === 'production', // true for HTTPS
         httpOnly: true,
         maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days for better mobile compatibility
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // 'none' for cross-origin
-        path: '/',
-        domain: process.env.NODE_ENV === 'production' ? '.herokuapp.com' : undefined
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax' // 'none' for cross-origin
     }
 }));
 
