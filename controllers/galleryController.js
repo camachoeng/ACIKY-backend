@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const { sanitizeText, sanitizeUrl } = require('../utils/sanitize');
 
 // Get all gallery images for gallery page (only visible, all categories)
 exports.getAllImages = async (req, res) => {
@@ -78,10 +79,25 @@ exports.createImage = async (req, res) => {
             });
         }
 
+        // Sanitize inputs to prevent XSS
+        const sanitizedTitle = sanitizeText(title);
+        const sanitizedDescription = description ? sanitizeText(description) : null;
+        const sanitizedImageUrl = sanitizeUrl(image_url);
+        const sanitizedThumbnailUrl = thumbnail_url ? sanitizeUrl(thumbnail_url) : sanitizedImageUrl;
+        const sanitizedAltText = alt_text ? sanitizeText(alt_text) : sanitizedTitle;
+
+        // Validate sanitized URLs
+        if (!sanitizedImageUrl) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid image URL'
+            });
+        }
+
         const [result] = await db.query(
             `INSERT INTO gallery (title, description, image_url, thumbnail_url, category, alt_text, display_order, visible, uploaded_by)
              VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)`,
-            [title, description || null, image_url, thumbnail_url || image_url, category, alt_text || title, display_order || 0, req.session.userId]
+            [sanitizedTitle, sanitizedDescription, sanitizedImageUrl, sanitizedThumbnailUrl, category, sanitizedAltText, display_order || 0, req.session.userId]
         );
 
         res.status(201).json({
@@ -114,12 +130,27 @@ exports.updateImage = async (req, res) => {
             });
         }
 
+        // Sanitize inputs to prevent XSS
+        const sanitizedTitle = title ? sanitizeText(title) : title;
+        const sanitizedDescription = description ? sanitizeText(description) : description;
+        const sanitizedImageUrl = image_url ? sanitizeUrl(image_url) : image_url;
+        const sanitizedThumbnailUrl = thumbnail_url ? sanitizeUrl(thumbnail_url) : thumbnail_url;
+        const sanitizedAltText = alt_text ? sanitizeText(alt_text) : alt_text;
+
+        // Validate sanitized URLs if provided
+        if (image_url && !sanitizedImageUrl) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid image URL'
+            });
+        }
+
         const [result] = await db.query(
             `UPDATE gallery
-             SET title = ?, description = ?, image_url = ?, thumbnail_url = ?, category = ?, 
+             SET title = ?, description = ?, image_url = ?, thumbnail_url = ?, category = ?,
                  alt_text = ?, display_order = ?, visible = ?
              WHERE id = ?`,
-            [title, description, image_url, thumbnail_url, category, alt_text, display_order, visible, id]
+            [sanitizedTitle, sanitizedDescription, sanitizedImageUrl, sanitizedThumbnailUrl, category, sanitizedAltText, display_order, visible, id]
         );
 
         if (result.affectedRows === 0) {

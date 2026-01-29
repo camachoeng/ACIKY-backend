@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const { sanitizeText } = require('../utils/sanitize');
 
 // Create new testimonial (public)
 exports.createTestimonial = async (req, res) => {
@@ -15,16 +16,21 @@ exports.createTestimonial = async (req, res) => {
 
         // Validate rating
         if (rating < 1 || rating > 5) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Rating must be between 1 and 5' 
+            return res.status(400).json({
+                success: false,
+                message: 'Rating must be between 1 and 5'
             });
         }
+
+        // Sanitize inputs to prevent XSS
+        const sanitizedAuthorName = sanitizeText(author_name);
+        const sanitizedLocation = location ? sanitizeText(location) : null;
+        const sanitizedContent = sanitizeText(content);
 
         // Insert testimonial with approved=0 (pending)
         const [result] = await db.query(
             'INSERT INTO testimonials (author_name, location, content, rating, activity_id, approved, featured) VALUES (?, ?, ?, ?, ?, 0, 0)',
-            [author_name, location || null, content, rating, activity_id || null]
+            [sanitizedAuthorName, sanitizedLocation, sanitizedContent, rating, activity_id || null]
         );
 
         res.status(201).json({ 

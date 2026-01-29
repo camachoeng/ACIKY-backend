@@ -1,5 +1,6 @@
 const bcrypt = require('bcrypt');
 const db = require('../config/database');
+const { validateEmail, validatePassword, validateUsername } = require('../utils/validation');
 
 // Register new user
 exports.register = async (req, res) => {
@@ -8,22 +9,53 @@ exports.register = async (req, res) => {
 
         // Validation
         if (!username || !email || !password) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'All fields are required' 
+            return res.status(400).json({
+                success: false,
+                message: 'All fields are required'
             });
         }
+
+        // Validate username
+        const usernameValidation = validateUsername(username);
+        if (!usernameValidation.valid) {
+            return res.status(400).json({
+                success: false,
+                message: usernameValidation.message
+            });
+        }
+
+        // Validate email format
+        const emailValidation = validateEmail(email);
+        if (!emailValidation.valid) {
+            return res.status(400).json({
+                success: false,
+                message: emailValidation.message
+            });
+        }
+
+        // Validate password strength
+        const passwordValidation = validatePassword(password);
+        if (!passwordValidation.valid) {
+            return res.status(400).json({
+                success: false,
+                message: passwordValidation.message
+            });
+        }
+
+        // Use trimmed values from validation
+        const trimmedUsername = usernameValidation.username;
+        const trimmedEmail = emailValidation.email;
 
         // Check if user already exists
         const [existingUsers] = await db.query(
             'SELECT * FROM users WHERE email = ? OR username = ?',
-            [email, username]
+            [trimmedEmail, trimmedUsername]
         );
 
         if (existingUsers.length > 0) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'User already exists' 
+            return res.status(400).json({
+                success: false,
+                message: 'User already exists'
             });
         }
 
@@ -33,20 +65,20 @@ exports.register = async (req, res) => {
         // Insert new user
         const [result] = await db.query(
             'INSERT INTO users (username, email, password) VALUES (?, ?, ?)',
-            [username, email, hashedPassword]
+            [trimmedUsername, trimmedEmail, hashedPassword]
         );
 
-        res.status(201).json({ 
-            success: true, 
+        res.status(201).json({
+            success: true,
             message: 'User registered successfully',
             userId: result.insertId
         });
 
     } catch (error) {
         console.error('Register error:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Server error during registration' 
+        res.status(500).json({
+            success: false,
+            message: 'Server error during registration'
         });
     }
 };
@@ -58,16 +90,25 @@ exports.login = async (req, res) => {
 
         // Validation
         if (!email || !password) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Email and password are required' 
+            return res.status(400).json({
+                success: false,
+                message: 'Email and password are required'
+            });
+        }
+
+        // Validate email format
+        const emailValidation = validateEmail(email);
+        if (!emailValidation.valid) {
+            return res.status(400).json({
+                success: false,
+                message: emailValidation.message
             });
         }
 
         // Find user
         const [users] = await db.query(
             'SELECT * FROM users WHERE email = ?',
-            [email]
+            [emailValidation.email]
         );
 
         if (users.length === 0) {
@@ -172,16 +213,37 @@ exports.updateProfile = async (req, res) => {
 
         // Validation
         if (!username || !email) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Username and email are required' 
+            return res.status(400).json({
+                success: false,
+                message: 'Username and email are required'
             });
         }
+
+        // Validate username
+        const usernameValidation = validateUsername(username);
+        if (!usernameValidation.valid) {
+            return res.status(400).json({
+                success: false,
+                message: usernameValidation.message
+            });
+        }
+
+        // Validate email format
+        const emailValidation = validateEmail(email);
+        if (!emailValidation.valid) {
+            return res.status(400).json({
+                success: false,
+                message: emailValidation.message
+            });
+        }
+
+        const trimmedUsername = usernameValidation.username;
+        const trimmedEmail = emailValidation.email;
 
         // Check if new username/email already exists (excluding current user)
         const [existingUsers] = await db.query(
             'SELECT * FROM users WHERE (email = ? OR username = ?) AND id != ?',
-            [email, username, userId]
+            [trimmedEmail, trimmedUsername, userId]
         );
 
         if (existingUsers.length > 0) {
@@ -194,19 +256,28 @@ exports.updateProfile = async (req, res) => {
         // If user wants to change password, verify current password first
         if (newPassword) {
             if (!currentPassword) {
-                return res.status(400).json({ 
-                    success: false, 
-                    message: 'Current password is required to set a new password' 
+                return res.status(400).json({
+                    success: false,
+                    message: 'Current password is required to set a new password'
+                });
+            }
+
+            // Validate new password strength
+            const passwordValidation = validatePassword(newPassword);
+            if (!passwordValidation.valid) {
+                return res.status(400).json({
+                    success: false,
+                    message: passwordValidation.message
                 });
             }
 
             // Get current user data
             const [users] = await db.query('SELECT * FROM users WHERE id = ?', [userId]);
-            
+
             if (users.length === 0) {
-                return res.status(404).json({ 
-                    success: false, 
-                    message: 'User not found' 
+                return res.status(404).json({
+                    success: false,
+                    message: 'User not found'
                 });
             }
 
@@ -216,9 +287,9 @@ exports.updateProfile = async (req, res) => {
             const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
 
             if (!isPasswordValid) {
-                return res.status(401).json({ 
-                    success: false, 
-                    message: 'Current password is incorrect' 
+                return res.status(401).json({
+                    success: false,
+                    message: 'Current password is incorrect'
                 });
             }
 
@@ -226,27 +297,27 @@ exports.updateProfile = async (req, res) => {
             const hashedPassword = await bcrypt.hash(newPassword, 10);
             await db.query(
                 'UPDATE users SET username = ?, email = ?, password = ? WHERE id = ?',
-                [username, email, hashedPassword, userId]
+                [trimmedUsername, trimmedEmail, hashedPassword, userId]
             );
         } else {
             // Update without password change
             await db.query(
                 'UPDATE users SET username = ?, email = ? WHERE id = ?',
-                [username, email, userId]
+                [trimmedUsername, trimmedEmail, userId]
             );
         }
 
         // Update session data
-        req.session.username = username;
-        req.session.email = email;
+        req.session.username = trimmedUsername;
+        req.session.email = trimmedEmail;
 
-        res.json({ 
-            success: true, 
+        res.json({
+            success: true,
             message: 'Profile updated successfully',
             user: {
                 id: userId,
-                username: username,
-                email: email,
+                username: trimmedUsername,
+                email: trimmedEmail,
                 role: req.session.role
             }
         });
