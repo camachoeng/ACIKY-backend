@@ -1,5 +1,6 @@
 const db = require('../config/database');
 const bcrypt = require('bcrypt');
+const { validateEmail, validatePassword, validateUsername } = require('../utils/validation');
 
 // Get all instructors for assignment to activities
 exports.getAllInstructors = async (req, res) => {
@@ -92,6 +93,33 @@ exports.createUser = async (req, res) => {
             });
         }
 
+        // Validate username
+        const usernameValidation = validateUsername(username);
+        if (!usernameValidation.valid) {
+            return res.status(400).json({
+                success: false,
+                message: usernameValidation.message
+            });
+        }
+
+        // Validate email format
+        const emailValidation = validateEmail(email);
+        if (!emailValidation.valid) {
+            return res.status(400).json({
+                success: false,
+                message: emailValidation.message
+            });
+        }
+
+        // Validate password strength
+        const passwordValidation = validatePassword(password);
+        if (!passwordValidation.valid) {
+            return res.status(400).json({
+                success: false,
+                message: passwordValidation.message
+            });
+        }
+
         // Validate role
         const validRoles = ['user', 'instructor', 'admin'];
         if (!validRoles.includes(role)) {
@@ -101,10 +129,13 @@ exports.createUser = async (req, res) => {
             });
         }
 
+        const trimmedUsername = usernameValidation.username;
+        const trimmedEmail = emailValidation.email;
+
         // Check if email already exists
         const [existingUsers] = await db.query(
             'SELECT id FROM users WHERE email = ?',
-            [email]
+            [trimmedEmail]
         );
 
         if (existingUsers.length > 0) {
@@ -120,7 +151,7 @@ exports.createUser = async (req, res) => {
         // Insert user
         const [result] = await db.query(
             'INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)',
-            [username, email, hashedPassword, role]
+            [trimmedUsername, trimmedEmail, hashedPassword, role]
         );
 
         res.status(201).json({
@@ -128,8 +159,8 @@ exports.createUser = async (req, res) => {
             message: 'User created successfully',
             data: {
                 id: result.insertId,
-                username,
-                email,
+                username: trimmedUsername,
+                email: trimmedEmail,
                 role
             }
         });
@@ -170,14 +201,30 @@ exports.updateUser = async (req, res) => {
         const updateValues = [];
 
         if (username !== undefined) {
+            // Validate username
+            const usernameValidation = validateUsername(username);
+            if (!usernameValidation.valid) {
+                return res.status(400).json({
+                    success: false,
+                    message: usernameValidation.message
+                });
+            }
             updateFields.push('username = ?');
-            updateValues.push(username);
+            updateValues.push(usernameValidation.username);
         }
         if (email !== undefined) {
+            // Validate email format
+            const emailValidation = validateEmail(email);
+            if (!emailValidation.valid) {
+                return res.status(400).json({
+                    success: false,
+                    message: emailValidation.message
+                });
+            }
             // Check if new email is already taken by another user
             const [emailCheck] = await db.query(
                 'SELECT id FROM users WHERE email = ? AND id != ?',
-                [email, id]
+                [emailValidation.email, id]
             );
             if (emailCheck.length > 0) {
                 return res.status(400).json({
@@ -186,9 +233,17 @@ exports.updateUser = async (req, res) => {
                 });
             }
             updateFields.push('email = ?');
-            updateValues.push(email);
+            updateValues.push(emailValidation.email);
         }
         if (password !== undefined && password.trim() !== '') {
+            // Validate password strength
+            const passwordValidation = validatePassword(password);
+            if (!passwordValidation.valid) {
+                return res.status(400).json({
+                    success: false,
+                    message: passwordValidation.message
+                });
+            }
             const hashedPassword = await bcrypt.hash(password, 10);
             updateFields.push('password = ?');
             updateValues.push(hashedPassword);
@@ -268,51 +323,6 @@ exports.deleteUser = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error deleting user'
-        });
-    }
-};
-exports.getAllInstructors = async (req, res) => {
-    try {
-        const [instructors] = await db.query(
-            `SELECT id, username, email, role 
-             FROM users 
-             WHERE role IN ('instructor') 
-             ORDER BY username ASC`
-        );
-
-        res.json({
-            success: true,
-            data: instructors
-        });
-
-    } catch (error) {
-        console.error('Get instructors error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error fetching instructors'
-        });
-    }
-};
-
-// Get all users (admin only)
-exports.getAllUsers = async (req, res) => {
-    try {
-        const [users] = await db.query(
-            `SELECT id, username, email, role, created_at 
-             FROM users 
-             ORDER BY created_at DESC`
-        );
-
-        res.json({
-            success: true,
-            data: users
-        });
-
-    } catch (error) {
-        console.error('Get all users error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error fetching users'
         });
     }
 };

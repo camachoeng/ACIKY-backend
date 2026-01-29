@@ -77,7 +77,21 @@ app.get('/', (req, res) => {
     res.json({ message: 'ACIKY Yoga Backend API is running!' });
 });
 
-// Start server
-app.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
-});
+// Error handling middleware (must be last)
+const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
+
+// Handle 404 errors for undefined routes
+app.use(notFoundHandler);
+
+// Global error handler
+app.use(errorHandler);
+
+// Start server only if not in test mode
+if (process.env.NODE_ENV !== 'test') {
+    app.listen(PORT, () => {
+        console.log(`🚀 Server running on http://localhost:${PORT}`);
+    });
+}
+
+// Export app for testing
+module.exports = app;

@@ -6,7 +6,7 @@ exports.getAllSpaces = async (req, res) => {
         const { active = true, limit = 20, offset = 0 } = req.query;
 
         let query = `
-            SELECT 
+            SELECT
                 s.*
             FROM spaces s
             WHERE 1=1
@@ -22,25 +22,58 @@ exports.getAllSpaces = async (req, res) => {
 
         const [spaces] = await db.query(query, params);
 
-        // Get instructors and disciplines for each space
-        for (let space of spaces) {
-            // Get instructors
-            const [instructors] = await db.query(`
-                SELECT u.id, u.username, u.email
-                FROM users u
-                INNER JOIN spaces_instructors si ON u.id = si.user_id
-                WHERE si.space_id = ? AND u.role = 'instructor'
-            `, [space.id]);
-            space.instructors = instructors;
-
-            // Get disciplines
-            const [disciplines] = await db.query(`
-                SELECT discipline_name
-                FROM spaces_disciplines
-                WHERE space_id = ?
-            `, [space.id]);
-            space.disciplines = disciplines.map(d => d.discipline_name);
+        if (spaces.length === 0) {
+            return res.json({
+                success: true,
+                data: []
+            });
         }
+
+        // Get all space IDs for batch queries
+        const spaceIds = spaces.map(s => s.id);
+
+        // Batch query for all instructors
+        const [instructorsData] = await db.query(`
+            SELECT si.space_id, u.id, u.username, u.email
+            FROM users u
+            INNER JOIN spaces_instructors si ON u.id = si.user_id
+            WHERE si.space_id IN (?) AND u.role = 'instructor'
+        `, [spaceIds]);
+
+        // Batch query for all disciplines
+        const [disciplinesData] = await db.query(`
+            SELECT space_id, discipline_name
+            FROM spaces_disciplines
+            WHERE space_id IN (?)
+        `, [spaceIds]);
+
+        // Group instructors and disciplines by space_id
+        const instructorsBySpace = {};
+        const disciplinesBySpace = {};
+
+        instructorsData.forEach(instructor => {
+            if (!instructorsBySpace[instructor.space_id]) {
+                instructorsBySpace[instructor.space_id] = [];
+            }
+            instructorsBySpace[instructor.space_id].push({
+                id: instructor.id,
+                username: instructor.username,
+                email: instructor.email
+            });
+        });
+
+        disciplinesData.forEach(discipline => {
+            if (!disciplinesBySpace[discipline.space_id]) {
+                disciplinesBySpace[discipline.space_id] = [];
+            }
+            disciplinesBySpace[discipline.space_id].push(discipline.discipline_name);
+        });
+
+        // Attach instructors and disciplines to each space
+        spaces.forEach(space => {
+            space.instructors = instructorsBySpace[space.id] || [];
+            space.disciplines = disciplinesBySpace[space.id] || [];
+        });
 
         res.json({
             success: true,
