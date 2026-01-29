@@ -1,21 +1,15 @@
-const db = require('../config/database');
+const routeService = require('../services/routeService');
+
+/**
+ * Route Controller - HTTP handling layer
+ * Handles requests/responses and delegates to service layer
+ */
 
 // Get all routes (public)
 exports.getAllRoutes = async (req, res) => {
     try {
         const { status } = req.query;
-
-        let query = 'SELECT * FROM routes WHERE 1=1';
-        const params = [];
-
-        if (status) {
-            query += ' AND status = ?';
-            params.push(status);
-        }
-
-        query += ' ORDER BY created_at DESC';
-
-        const [routes] = await db.query(query, params);
+        const routes = await routeService.getAllRoutes(status);
 
         res.json({
             success: true,
@@ -35,13 +29,9 @@ exports.getAllRoutes = async (req, res) => {
 exports.getRouteById = async (req, res) => {
     try {
         const { id } = req.params;
+        const route = await routeService.getRouteById(id);
 
-        const [routes] = await db.query(
-            'SELECT * FROM routes WHERE id = ?',
-            [id]
-        );
-
-        if (routes.length === 0) {
+        if (!route) {
             return res.status(404).json({
                 success: false,
                 message: 'Route not found'
@@ -50,7 +40,7 @@ exports.getRouteById = async (req, res) => {
 
         res.json({
             success: true,
-            data: routes[0]
+            data: route
         });
 
     } catch (error) {
@@ -65,48 +55,22 @@ exports.getRouteById = async (req, res) => {
 // Create route (admin only)
 exports.createRoute = async (req, res) => {
     try {
-        const {
-            name,
-            origin,
-            destination,
-            description,
-            frequency,
-            status,
-            participants_count,
-            spaces_established
-        } = req.body;
-
-        // Validation
-        if (!name || !origin || !destination) {
-            return res.status(400).json({
-                success: false,
-                message: 'Name, origin, and destination are required'
-            });
-        }
-
-        const [result] = await db.query(`
-            INSERT INTO routes 
-            (name, origin, destination, description, frequency, status, 
-             participants_count, spaces_established)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `, [
-            name,
-            origin,
-            destination,
-            description || null,
-            frequency || null,
-            status || 'planning',
-            participants_count || 0,
-            spaces_established || 0
-        ]);
+        const routeId = await routeService.createRoute(req.body);
 
         res.status(201).json({
             success: true,
             message: 'Route created successfully',
-            data: { id: result.insertId }
+            data: { id: routeId }
         });
 
     } catch (error) {
+        if (error.message === 'Name, origin, and destination are required') {
+            return res.status(400).json({
+                success: false,
+                message: error.message
+            });
+        }
+
         console.error('Create route error:', error);
         res.status(500).json({
             success: false,
@@ -119,50 +83,14 @@ exports.createRoute = async (req, res) => {
 exports.updateRoute = async (req, res) => {
     try {
         const { id } = req.params;
-        const updates = req.body;
+        const updated = await routeService.updateRoute(id, req.body);
 
-        // Check if route exists
-        const [existing] = await db.query(
-            'SELECT id FROM routes WHERE id = ?',
-            [id]
-        );
-
-        if (existing.length === 0) {
+        if (updated === null) {
             return res.status(404).json({
                 success: false,
                 message: 'Route not found'
             });
         }
-
-        // Build dynamic update query
-        const allowedFields = [
-            'name', 'origin', 'destination', 'description', 'frequency',
-            'status', 'participants_count', 'spaces_established'
-        ];
-
-        const fields = [];
-        const values = [];
-
-        for (const [key, value] of Object.entries(updates)) {
-            if (allowedFields.includes(key)) {
-                fields.push(`${key} = ?`);
-                values.push(value);
-            }
-        }
-
-        if (fields.length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'No valid fields to update'
-            });
-        }
-
-        values.push(id);
-
-        await db.query(
-            `UPDATE routes SET ${fields.join(', ')} WHERE id = ?`,
-            values
-        );
 
         res.json({
             success: true,
@@ -170,6 +98,13 @@ exports.updateRoute = async (req, res) => {
         });
 
     } catch (error) {
+        if (error.message === 'No valid fields to update') {
+            return res.status(400).json({
+                success: false,
+                message: error.message
+            });
+        }
+
         console.error('Update route error:', error);
         res.status(500).json({
             success: false,
@@ -182,13 +117,9 @@ exports.updateRoute = async (req, res) => {
 exports.deleteRoute = async (req, res) => {
     try {
         const { id } = req.params;
+        const deleted = await routeService.deleteRoute(id);
 
-        const [result] = await db.query(
-            'DELETE FROM routes WHERE id = ?',
-            [id]
-        );
-
-        if (result.affectedRows === 0) {
+        if (!deleted) {
             return res.status(404).json({
                 success: false,
                 message: 'Route not found'

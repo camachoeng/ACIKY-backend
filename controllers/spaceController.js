@@ -1,79 +1,20 @@
-const db = require('../config/database');
+const spaceService = require('../services/spaceService');
+
+/**
+ * Space Controller - HTTP handling layer
+ * Handles requests/responses and delegates to service layer
+ */
 
 // Get all spaces (public)
 exports.getAllSpaces = async (req, res) => {
     try {
-        const { active = true, limit = 20, offset = 0 } = req.query;
+        const filters = {
+            active: req.query.active,
+            limit: req.query.limit,
+            offset: req.query.offset
+        };
 
-        let query = `
-            SELECT
-                s.*
-            FROM spaces s
-            WHERE 1=1
-        `;
-        const params = [];
-
-        if (active === 'true' || active === true) {
-            query += ' AND s.active = true';
-        }
-
-        query += ' ORDER BY s.created_at DESC LIMIT ? OFFSET ?';
-        params.push(parseInt(limit), parseInt(offset));
-
-        const [spaces] = await db.query(query, params);
-
-        if (spaces.length === 0) {
-            return res.json({
-                success: true,
-                data: []
-            });
-        }
-
-        // Get all space IDs for batch queries
-        const spaceIds = spaces.map(s => s.id);
-
-        // Batch query for all instructors
-        const [instructorsData] = await db.query(`
-            SELECT si.space_id, u.id, u.username, u.email
-            FROM users u
-            INNER JOIN spaces_instructors si ON u.id = si.user_id
-            WHERE si.space_id IN (?) AND u.role = 'instructor'
-        `, [spaceIds]);
-
-        // Batch query for all disciplines
-        const [disciplinesData] = await db.query(`
-            SELECT space_id, discipline_name
-            FROM spaces_disciplines
-            WHERE space_id IN (?)
-        `, [spaceIds]);
-
-        // Group instructors and disciplines by space_id
-        const instructorsBySpace = {};
-        const disciplinesBySpace = {};
-
-        instructorsData.forEach(instructor => {
-            if (!instructorsBySpace[instructor.space_id]) {
-                instructorsBySpace[instructor.space_id] = [];
-            }
-            instructorsBySpace[instructor.space_id].push({
-                id: instructor.id,
-                username: instructor.username,
-                email: instructor.email
-            });
-        });
-
-        disciplinesData.forEach(discipline => {
-            if (!disciplinesBySpace[discipline.space_id]) {
-                disciplinesBySpace[discipline.space_id] = [];
-            }
-            disciplinesBySpace[discipline.space_id].push(discipline.discipline_name);
-        });
-
-        // Attach instructors and disciplines to each space
-        spaces.forEach(space => {
-            space.instructors = instructorsBySpace[space.id] || [];
-            space.disciplines = disciplinesBySpace[space.id] || [];
-        });
+        const spaces = await spaceService.getAllSpaces(filters);
 
         res.json({
             success: true,
@@ -93,34 +34,14 @@ exports.getAllSpaces = async (req, res) => {
 exports.getSpaceById = async (req, res) => {
     try {
         const { id } = req.params;
+        const space = await spaceService.getSpaceById(id);
 
-        const [spaces] = await db.query('SELECT * FROM spaces WHERE id = ?', [id]);
-
-        if (spaces.length === 0) {
+        if (!space) {
             return res.status(404).json({
                 success: false,
                 message: 'Space not found'
             });
         }
-
-        const space = spaces[0];
-
-        // Get instructors
-        const [instructors] = await db.query(`
-            SELECT u.id, u.username, u.email
-            FROM users u
-            INNER JOIN spaces_instructors si ON u.id = si.user_id
-            WHERE si.space_id = ? AND u.role = 'instructor'
-        `, [space.id]);
-        space.instructors = instructors;
-
-        // Get disciplines
-        const [disciplines] = await db.query(`
-            SELECT discipline_name
-            FROM spaces_disciplines
-            WHERE space_id = ?
-        `, [space.id]);
-        space.disciplines = disciplines.map(d => d.discipline_name);
 
         res.json({
             success: true,
@@ -139,65 +60,7 @@ exports.getSpaceById = async (req, res) => {
 // Create new space (admin only)
 exports.createSpace = async (req, res) => {
     try {
-        const { name, image, address, phone, email, location, instructor_ids = [], disciplines = [] } = req.body;
-
-        // Validation
-        if (!name) {
-            return res.status(400).json({
-                success: false,
-                message: 'Space name is required'
-            });
-        }
-
-        // Insert space
-        const [result] = await db.query(
-            `INSERT INTO spaces (name, image, address, phone, email, location) 
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [name, image, address, phone, email, location]
-        );
-
-        const spaceId = result.insertId;
-
-        // Add instructors if provided
-        if (instructor_ids && instructor_ids.length > 0) {
-            for (let userId of instructor_ids) {
-                await db.query(
-                    'INSERT INTO spaces_instructors (space_id, user_id) VALUES (?, ?)',
-                    [spaceId, userId]
-                );
-            }
-        }
-
-        // Add disciplines if provided
-        if (disciplines && disciplines.length > 0) {
-            for (let discipline of disciplines) {
-                await db.query(
-                    'INSERT INTO spaces_disciplines (space_id, discipline_name) VALUES (?, ?)',
-                    [spaceId, discipline]
-                );
-            }
-        }
-
-        // Get the complete space data
-        const [spaces] = await db.query('SELECT * FROM spaces WHERE id = ?', [spaceId]);
-        const space = spaces[0];
-
-        // Get instructors
-        const [instructors] = await db.query(`
-            SELECT u.id, u.username, u.email
-            FROM users u
-            INNER JOIN spaces_instructors si ON u.id = si.user_id
-            WHERE si.space_id = ?
-        `, [spaceId]);
-        space.instructors = instructors;
-
-        // Get disciplines
-        const [disciplinesList] = await db.query(`
-            SELECT discipline_name
-            FROM spaces_disciplines
-            WHERE space_id = ?
-        `, [spaceId]);
-        space.disciplines = disciplinesList.map(d => d.discipline_name);
+        const space = await spaceService.createSpace(req.body);
 
         res.status(201).json({
             success: true,
@@ -206,6 +69,13 @@ exports.createSpace = async (req, res) => {
         });
 
     } catch (error) {
+        if (error.message === 'Space name is required') {
+            return res.status(400).json({
+                success: false,
+                message: error.message
+            });
+        }
+
         console.error('Create space error:', error);
         res.status(500).json({
             success: false,
@@ -218,110 +88,14 @@ exports.createSpace = async (req, res) => {
 exports.updateSpace = async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, image, address, phone, email, location, active, instructor_ids, disciplines } = req.body;
+        const space = await spaceService.updateSpace(id, req.body);
 
-        // Check if space exists
-        const [existing] = await db.query('SELECT * FROM spaces WHERE id = ?', [id]);
-        if (existing.length === 0) {
+        if (!space) {
             return res.status(404).json({
                 success: false,
                 message: 'Space not found'
             });
         }
-
-        // Update basic fields
-        const updateFields = [];
-        const updateValues = [];
-
-        if (name !== undefined) {
-            updateFields.push('name = ?');
-            updateValues.push(name);
-        }
-        if (image !== undefined) {
-            updateFields.push('image = ?');
-            updateValues.push(image);
-        }
-        if (address !== undefined) {
-            updateFields.push('address = ?');
-            updateValues.push(address);
-        }
-        if (phone !== undefined) {
-            updateFields.push('phone = ?');
-            updateValues.push(phone);
-        }
-        if (email !== undefined) {
-            updateFields.push('email = ?');
-            updateValues.push(email);
-        }
-        if (location !== undefined) {
-            updateFields.push('location = ?');
-            updateValues.push(location);
-        }
-        if (active !== undefined) {
-            updateFields.push('active = ?');
-            updateValues.push(active);
-        }
-
-        if (updateFields.length > 0) {
-            updateValues.push(id);
-            await db.query(
-                `UPDATE spaces SET ${updateFields.join(', ')} WHERE id = ?`,
-                updateValues
-            );
-        }
-
-        // Update instructors if provided
-        if (instructor_ids !== undefined) {
-            // Remove all existing instructors
-            await db.query('DELETE FROM spaces_instructors WHERE space_id = ?', [id]);
-            
-            // Add new instructors
-            if (instructor_ids.length > 0) {
-                for (let userId of instructor_ids) {
-                    await db.query(
-                        'INSERT INTO spaces_instructors (space_id, user_id) VALUES (?, ?)',
-                        [id, userId]
-                    );
-                }
-            }
-        }
-
-        // Update disciplines if provided
-        if (disciplines !== undefined) {
-            // Remove all existing disciplines
-            await db.query('DELETE FROM spaces_disciplines WHERE space_id = ?', [id]);
-            
-            // Add new disciplines
-            if (disciplines.length > 0) {
-                for (let discipline of disciplines) {
-                    await db.query(
-                        'INSERT INTO spaces_disciplines (space_id, discipline_name) VALUES (?, ?)',
-                        [id, discipline]
-                    );
-                }
-            }
-        }
-
-        // Get updated space data
-        const [spaces] = await db.query('SELECT * FROM spaces WHERE id = ?', [id]);
-        const space = spaces[0];
-
-        // Get instructors
-        const [instructors] = await db.query(`
-            SELECT u.id, u.username, u.email
-            FROM users u
-            INNER JOIN spaces_instructors si ON u.id = si.user_id
-            WHERE si.space_id = ?
-        `, [id]);
-        space.instructors = instructors;
-
-        // Get disciplines
-        const [disciplinesList] = await db.query(`
-            SELECT discipline_name
-            FROM spaces_disciplines
-            WHERE space_id = ?
-        `, [id]);
-        space.disciplines = disciplinesList.map(d => d.discipline_name);
 
         res.json({
             success: true,
@@ -342,18 +116,14 @@ exports.updateSpace = async (req, res) => {
 exports.deleteSpace = async (req, res) => {
     try {
         const { id } = req.params;
+        const deleted = await spaceService.deleteSpace(id);
 
-        // Check if space exists
-        const [existing] = await db.query('SELECT * FROM spaces WHERE id = ?', [id]);
-        if (existing.length === 0) {
+        if (!deleted) {
             return res.status(404).json({
                 success: false,
                 message: 'Space not found'
             });
         }
-
-        // Delete space (cascade will handle junction tables)
-        await db.query('DELETE FROM spaces WHERE id = ?', [id]);
 
         res.json({
             success: true,
@@ -373,32 +143,7 @@ exports.deleteSpace = async (req, res) => {
 exports.addInstructor = async (req, res) => {
     try {
         const { spaceId, userId } = req.body;
-
-        if (!spaceId || !userId) {
-            return res.status(400).json({
-                success: false,
-                message: 'Space ID and User ID are required'
-            });
-        }
-
-        // Verify user is an instructor
-        const [users] = await db.query(
-            'SELECT * FROM users WHERE id = ? AND role = "instructor"',
-            [userId]
-        );
-
-        if (users.length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'User is not an instructor'
-            });
-        }
-
-        // Add instructor to space
-        await db.query(
-            'INSERT INTO spaces_instructors (space_id, user_id) VALUES (?, ?)',
-            [spaceId, userId]
-        );
+        await spaceService.addInstructorToSpace(spaceId, userId);
 
         res.json({
             success: true,
@@ -412,6 +157,15 @@ exports.addInstructor = async (req, res) => {
                 message: 'Instructor already assigned to this space'
             });
         }
+
+        if (error.message === 'Space ID and User ID are required' ||
+            error.message === 'User is not an instructor') {
+            return res.status(400).json({
+                success: false,
+                message: error.message
+            });
+        }
+
         console.error('Add instructor to space error:', error);
         res.status(500).json({
             success: false,
@@ -424,18 +178,7 @@ exports.addInstructor = async (req, res) => {
 exports.removeInstructor = async (req, res) => {
     try {
         const { spaceId, userId } = req.body;
-
-        if (!spaceId || !userId) {
-            return res.status(400).json({
-                success: false,
-                message: 'Space ID and User ID are required'
-            });
-        }
-
-        await db.query(
-            'DELETE FROM spaces_instructors WHERE space_id = ? AND user_id = ?',
-            [spaceId, userId]
-        );
+        await spaceService.removeInstructorFromSpace(spaceId, userId);
 
         res.json({
             success: true,
@@ -443,6 +186,13 @@ exports.removeInstructor = async (req, res) => {
         });
 
     } catch (error) {
+        if (error.message === 'Space ID and User ID are required') {
+            return res.status(400).json({
+                success: false,
+                message: error.message
+            });
+        }
+
         console.error('Remove instructor from space error:', error);
         res.status(500).json({
             success: false,

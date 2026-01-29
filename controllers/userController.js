@@ -1,16 +1,14 @@
-const db = require('../config/database');
-const bcrypt = require('bcrypt');
-const { validateEmail, validatePassword, validateUsername } = require('../utils/validation');
+const userService = require('../services/userService');
+
+/**
+ * User Controller - HTTP handling layer
+ * Handles requests/responses and delegates to service layer
+ */
 
 // Get all instructors for assignment to activities
 exports.getAllInstructors = async (req, res) => {
     try {
-        const [instructors] = await db.query(
-            `SELECT id, username, email, role 
-             FROM users 
-             WHERE role IN ('instructor') 
-             ORDER BY username ASC`
-        );
+        const instructors = await userService.getAllInstructors();
 
         res.json({
             success: true,
@@ -29,11 +27,7 @@ exports.getAllInstructors = async (req, res) => {
 // Get all users (admin only)
 exports.getAllUsers = async (req, res) => {
     try {
-        const [users] = await db.query(
-            `SELECT id, username, email, role, created_at 
-             FROM users 
-             ORDER BY created_at DESC`
-        );
+        const users = await userService.getAllUsers();
 
         res.json({
             success: true,
@@ -53,13 +47,9 @@ exports.getAllUsers = async (req, res) => {
 exports.getUserById = async (req, res) => {
     try {
         const { id } = req.params;
+        const user = await userService.getUserById(id);
 
-        const [users] = await db.query(
-            'SELECT id, username, email, role, created_at FROM users WHERE id = ?',
-            [id]
-        );
-
-        if (users.length === 0) {
+        if (!user) {
             return res.status(404).json({
                 success: false,
                 message: 'User not found'
@@ -68,7 +58,7 @@ exports.getUserById = async (req, res) => {
 
         res.json({
             success: true,
-            data: users[0]
+            data: user
         });
 
     } catch (error) {
@@ -83,93 +73,21 @@ exports.getUserById = async (req, res) => {
 // Create new user (admin only)
 exports.createUser = async (req, res) => {
     try {
-        const { username, email, password, role = 'user' } = req.body;
-
-        // Validation
-        if (!username || !email || !password) {
-            return res.status(400).json({
-                success: false,
-                message: 'Username, email, and password are required'
-            });
-        }
-
-        // Validate username
-        const usernameValidation = validateUsername(username);
-        if (!usernameValidation.valid) {
-            return res.status(400).json({
-                success: false,
-                message: usernameValidation.message
-            });
-        }
-
-        // Validate email format
-        const emailValidation = validateEmail(email);
-        if (!emailValidation.valid) {
-            return res.status(400).json({
-                success: false,
-                message: emailValidation.message
-            });
-        }
-
-        // Validate password strength
-        const passwordValidation = validatePassword(password);
-        if (!passwordValidation.valid) {
-            return res.status(400).json({
-                success: false,
-                message: passwordValidation.message
-            });
-        }
-
-        // Validate role
-        const validRoles = ['user', 'instructor', 'admin'];
-        if (!validRoles.includes(role)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid role. Must be: user, instructor, or admin'
-            });
-        }
-
-        const trimmedUsername = usernameValidation.username;
-        const trimmedEmail = emailValidation.email;
-
-        // Check if email already exists
-        const [existingUsers] = await db.query(
-            'SELECT id FROM users WHERE email = ?',
-            [trimmedEmail]
-        );
-
-        if (existingUsers.length > 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'Email already registered'
-            });
-        }
-
-        // Hash password
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        // Insert user
-        const [result] = await db.query(
-            'INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)',
-            [trimmedUsername, trimmedEmail, hashedPassword, role]
-        );
+        const user = await userService.createUser(req.body);
 
         res.status(201).json({
             success: true,
             message: 'User created successfully',
-            data: {
-                id: result.insertId,
-                username: trimmedUsername,
-                email: trimmedEmail,
-                role
-            }
+            data: user
         });
 
     } catch (error) {
+        const statusCode = error.statusCode || 500;
         console.error('Create user error:', error);
-        res.status(500).json({
+
+        res.status(statusCode).json({
             success: false,
-            message: 'Error creating user'
+            message: error.message || 'Error creating user'
         });
     }
 };
@@ -178,113 +96,30 @@ exports.createUser = async (req, res) => {
 exports.updateUser = async (req, res) => {
     try {
         const { id } = req.params;
-        const { username, email, password, role } = req.body;
+        const currentUserId = req.session.userId;
 
-        // Check if user exists
-        const [existing] = await db.query('SELECT * FROM users WHERE id = ?', [id]);
-        if (existing.length === 0) {
+        const user = await userService.updateUser(id, req.body, currentUserId);
+
+        if (!user) {
             return res.status(404).json({
                 success: false,
                 message: 'User not found'
             });
         }
 
-        // Prevent admin from changing their own role to non-admin
-        if (parseInt(id) === req.session.userId && role && role !== 'admin') {
-            return res.status(403).json({
-                success: false,
-                message: 'Cannot change your own admin role'
-            });
-        }
-
-        const updateFields = [];
-        const updateValues = [];
-
-        if (username !== undefined) {
-            // Validate username
-            const usernameValidation = validateUsername(username);
-            if (!usernameValidation.valid) {
-                return res.status(400).json({
-                    success: false,
-                    message: usernameValidation.message
-                });
-            }
-            updateFields.push('username = ?');
-            updateValues.push(usernameValidation.username);
-        }
-        if (email !== undefined) {
-            // Validate email format
-            const emailValidation = validateEmail(email);
-            if (!emailValidation.valid) {
-                return res.status(400).json({
-                    success: false,
-                    message: emailValidation.message
-                });
-            }
-            // Check if new email is already taken by another user
-            const [emailCheck] = await db.query(
-                'SELECT id FROM users WHERE email = ? AND id != ?',
-                [emailValidation.email, id]
-            );
-            if (emailCheck.length > 0) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Email already in use by another user'
-                });
-            }
-            updateFields.push('email = ?');
-            updateValues.push(emailValidation.email);
-        }
-        if (password !== undefined && password.trim() !== '') {
-            // Validate password strength
-            const passwordValidation = validatePassword(password);
-            if (!passwordValidation.valid) {
-                return res.status(400).json({
-                    success: false,
-                    message: passwordValidation.message
-                });
-            }
-            const hashedPassword = await bcrypt.hash(password, 10);
-            updateFields.push('password = ?');
-            updateValues.push(hashedPassword);
-        }
-        if (role !== undefined) {
-            const validRoles = ['user', 'instructor', 'admin'];
-            if (!validRoles.includes(role)) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Invalid role'
-                });
-            }
-            updateFields.push('role = ?');
-            updateValues.push(role);
-        }
-
-        if (updateFields.length > 0) {
-            updateValues.push(id);
-            await db.query(
-                `UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`,
-                updateValues
-            );
-        }
-
-        // Get updated user
-        const [updatedUser] = await db.query(
-            'SELECT id, username, email, role, created_at FROM users WHERE id = ?',
-            [id]
-        );
-
         res.json({
             success: true,
             message: 'User updated successfully',
-            data: updatedUser[0]
+            data: user
         });
 
     } catch (error) {
+        const statusCode = error.statusCode || 500;
         console.error('Update user error:', error);
-        res.status(500).json({
+
+        res.status(statusCode).json({
             success: false,
-            message: 'Error updating user'
+            message: error.message || 'Error updating user'
         });
     }
 };
@@ -293,25 +128,16 @@ exports.updateUser = async (req, res) => {
 exports.deleteUser = async (req, res) => {
     try {
         const { id } = req.params;
+        const currentUserId = req.session.userId;
 
-        // Prevent admin from deleting themselves
-        if (parseInt(id) === req.session.userId) {
-            return res.status(403).json({
-                success: false,
-                message: 'Cannot delete your own account'
-            });
-        }
+        const deleted = await userService.deleteUser(id, currentUserId);
 
-        // Check if user exists
-        const [existing] = await db.query('SELECT * FROM users WHERE id = ?', [id]);
-        if (existing.length === 0) {
+        if (!deleted) {
             return res.status(404).json({
                 success: false,
                 message: 'User not found'
             });
         }
-
-        await db.query('DELETE FROM users WHERE id = ?', [id]);
 
         res.json({
             success: true,
@@ -319,10 +145,12 @@ exports.deleteUser = async (req, res) => {
         });
 
     } catch (error) {
+        const statusCode = error.statusCode || 500;
         console.error('Delete user error:', error);
-        res.status(500).json({
+
+        res.status(statusCode).json({
             success: false,
-            message: 'Error deleting user'
+            message: error.message || 'Error deleting user'
         });
     }
 };
@@ -332,30 +160,11 @@ exports.updateUserRole = async (req, res) => {
     try {
         const { id } = req.params;
         const { role } = req.body;
+        const currentUserId = req.session.userId;
 
-        // Validate role
-        const validRoles = ['user', 'instructor', 'admin'];
-        if (!validRoles.includes(role)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid role. Must be: user, instructor, or admin'
-            });
-        }
+        const updated = await userService.updateUserRole(id, role, currentUserId);
 
-        // Prevent user from changing their own role
-        if (parseInt(id) === req.session.userId) {
-            return res.status(403).json({
-                success: false,
-                message: 'Cannot change your own role'
-            });
-        }
-
-        const [result] = await db.query(
-            'UPDATE users SET role = ? WHERE id = ?',
-            [role, id]
-        );
-
-        if (result.affectedRows === 0) {
+        if (!updated) {
             return res.status(404).json({
                 success: false,
                 message: 'User not found'
@@ -368,11 +177,12 @@ exports.updateUserRole = async (req, res) => {
         });
 
     } catch (error) {
+        const statusCode = error.statusCode || 500;
         console.error('Update user role error:', error);
-        res.status(500).json({
+
+        res.status(statusCode).json({
             success: false,
-            message: 'Error updating user role'
+            message: error.message || 'Error updating user role'
         });
     }
 };
-
