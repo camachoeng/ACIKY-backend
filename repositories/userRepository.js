@@ -54,18 +54,13 @@ class UserRepository {
     /**
      * Find all users
      */
-    async findAll({ role, active, limit = 50, offset = 0 }) {
-        let query = 'SELECT id, username, email, role, active, created_at FROM users WHERE 1=1';
+    async findAll({ role, limit = 50, offset = 0 }) {
+        let query = 'SELECT id, username, email, role, created_at FROM users WHERE 1=1';
         const params = [];
 
         if (role) {
             query += ' AND role = ?';
             params.push(role);
-        }
-
-        if (active !== undefined) {
-            query += ' AND active = ?';
-            params.push(active);
         }
 
         query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
@@ -78,18 +73,13 @@ class UserRepository {
     /**
      * Count users
      */
-    async count({ role, active }) {
+    async count({ role }) {
         let query = 'SELECT COUNT(*) as count FROM users WHERE 1=1';
         const params = [];
 
         if (role) {
             query += ' AND role = ?';
             params.push(role);
-        }
-
-        if (active !== undefined) {
-            query += ' AND active = ?';
-            params.push(active);
         }
 
         const [result] = await db.query(query, params);
@@ -114,7 +104,7 @@ class UserRepository {
         const updateFields = [];
         const updateValues = [];
 
-        const allowedFields = ['username', 'email', 'password', 'role', 'active'];
+        const allowedFields = ['username', 'email', 'password', 'role'];
 
         allowedFields.forEach(field => {
             if (fields[field] !== undefined) {
